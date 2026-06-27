@@ -271,6 +271,15 @@ def get_progress(db: Session = Depends(get_db),
         models.UserProgress.user_id == current_user.id).all()
     return [{"route_id": p.route_id, "status": p.status,
              "completed_checkpoints": p.completed_checkpoints} for p in progress]
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.post("/api/progress/{route_id}/checkpoint")
 def update_checkpoint(route_id: int, update: ProgressUpdate,
