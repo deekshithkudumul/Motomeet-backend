@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+import os
 import json
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, status
@@ -9,6 +10,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime
+from groq import Groq as GroqClient
 import models, auth
 from database import engine, get_db, Base
 from data.routes_data import ROUTES_DATA
@@ -52,12 +54,8 @@ app = FastAPI(title="MotoMeet API", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://motomeet-frontend.vercel.app",
-        "*"
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -85,6 +83,15 @@ class MessageCreate(BaseModel):
 class ProgressUpdate(BaseModel):
     checkpoint_id: int
     completed: bool
+
+class AIGuideRequest(BaseModel):
+    route_name: str
+    difficulty: str
+    distance_km: float
+    duration_days: int
+    states: str
+    highlights: str
+    experience_level: str = "Beginner"
 
 # ── Auth Routes ───────────────────────────────────────
 @app.post("/api/auth/register")
@@ -271,15 +278,6 @@ def get_progress(db: Session = Depends(get_db),
         models.UserProgress.user_id == current_user.id).all()
     return [{"route_id": p.route_id, "status": p.status,
              "completed_checkpoints": p.completed_checkpoints} for p in progress]
-from fastapi.middleware.cors import CORSMiddleware
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 @app.post("/api/progress/{route_id}/checkpoint")
 def update_checkpoint(route_id: int, update: ProgressUpdate,
@@ -332,29 +330,17 @@ def get_dashboard(db: Session = Depends(get_db),
         "total_batches": len(batches),
         "completed_routes": [p.route_id for p in completed_routes]
     }
-import os
-from groq import Groq as GroqClient
 
-class AIGuideRequest(BaseModel):
-    route_name: str
-    difficulty: str
-    distance_km: float
-    duration_days: int
-    states: str
-    highlights: str
-    experience_level: str = "Beginner"
-
+# ── AI Guide API ──────────────────────────────────────
 @app.post("/api/ai/route-guide")
 def get_ai_guide(req: AIGuideRequest):
     try:
         api_key = os.getenv("GROQ_API_KEY")
         if not api_key:
             raise HTTPException(status_code=500, detail="AI service not configured")
-        
         client = GroqClient(api_key=api_key)
-        
         prompt = f"""You are an expert Indian motorcycle touring guide with 20 years of experience.
-        
+
 A rider is planning the following route:
 - Route: {req.route_name}
 - States: {req.states}
@@ -372,19 +358,16 @@ Give a personalized riding guide with exactly these 4 sections:
 
 Keep each section to 3-4 bullet points. Be specific to this route, not generic.
 Use Indian context — mention dhabas, petrol pumps, local conditions."""
-
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=800,
-            temperature=0.7
+            max_tokens=800, temperature=0.7
         )
-        
         return {"guide": response.choices[0].message.content}
-    
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ── Root ──────────────────────────────────────────────
 @app.get("/")
 def root():
     return {"message": "MotoMeet API is running 🏍️"}
