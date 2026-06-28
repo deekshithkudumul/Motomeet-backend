@@ -370,4 +370,4 @@ Use Indian context — mention dhabas, petrol pumps, local conditions."""
 # ── Root ──────────────────────────────────────────────
 @app.get("/")
 def root():
-    return {"message": "MotoMeet API is running 🏍️"}
+    return {"message": "MotoMeet API is running 🏍️ v2"}
