@@ -48,6 +48,24 @@ async def lifespan(app):
     db = next(get_db())
     seed_routes(db)
     yield
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc)},
+        headers={"Access-Control-Allow-Origin": "*"}
+    )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers={"Access-Control-Allow-Origin": "*"}
+    )
 
 # ── App ───────────────────────────────────────────────
 app = FastAPI(title="MotoMeet API", version="1.0.0", lifespan=lifespan)
